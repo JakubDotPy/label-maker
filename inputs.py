@@ -24,6 +24,7 @@ Example of output:
 
 """
 import csv
+import itertools
 import logging
 
 log = logging.getLogger(__name__)
@@ -70,7 +71,7 @@ def better_input(question, value_type, valid_options=None):
 
     while True:
         try:
-            answer = value_type(input(f'{question}{valid_options if valid_options is not None else ""}: '))
+            answer = value_type(input(f'- {question}{valid_options if valid_options is not None else ""}: '))
 
             if valid_options and answer not in valid_options:
                 raise ValueError('neni z povolených hodnot')
@@ -96,9 +97,10 @@ def user_input():
         Celkova cena: 194
         -- další? [a/n]:
     """
-
+    label_counter = itertools.count(start=1)
     entries = []
     while True:
+        print(f'Cedulka číslo: {next(label_counter):>3}')
         item = {
             'name'       : better_input('Název', str),
             'form'       : better_input('Forma', str, valid_options=VALID_FORMS.keys()),
@@ -113,10 +115,10 @@ def user_input():
             return entries
 
 
-def csv_input():
+def csv_input(input_file):
     """Load data from csv."""
     log.info('loading data from csv file')
-    with open('input/sample_data.csv', encoding='UTF-8') as file:
+    with open(input_file, encoding='UTF-8') as file:
         reader = csv.DictReader(file, quoting=csv.QUOTE_NONNUMERIC)
         data = list(reader)
     for item in data:
