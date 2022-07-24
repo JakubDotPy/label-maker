@@ -39,7 +39,7 @@ def setup_argparse():
         '-f',
         '--file',
         nargs='*',
-        help='specify input data csv files (defaults to: %(default)s)',
+        help='specify input data csv files',
         )
 
     # outputs
