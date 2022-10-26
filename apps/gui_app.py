@@ -4,6 +4,7 @@ from pathlib import Path
 import PySimpleGUI as sg
 
 from calc import calculate_unit_price
+from inputs import VALID_FORMS
 from inputs import csv_input
 from outputs import export_list_of_labels
 from outputs import export_to_csv
@@ -21,6 +22,15 @@ class GUIApp:
             '-FILE-IN-': self.update_files,
             '-ADD-'    : self.add_user_label,
             '-CREATE-' : self.generate_labels,
+            '-TABLE-'  : self.display_table_delete_popup,
+        }
+        self.table_header_to_key = {
+            'name'       : 'Název',
+            'form'       : 'Forma',
+            'unit'       : 'Jednotky',
+            'quantity'   : 'Počet',
+            'total_price': 'Celková cena',
+            'unit_price' : 'Cena ks',
         }
 
     def __enter__(self):
@@ -29,6 +39,16 @@ class GUIApp:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.window.close()
+
+    def __eat_events__(self):
+        """Eats falsely fired events
+        NOTE: https://github.com/PySimpleGUI/PySimpleGUI/issues/4268
+        """
+        while True:
+            event, values = self.window.read(timeout=0)
+            if event == '__TIMEOUT__':
+                break
+        return
 
     def run(self):
         while True:
@@ -40,7 +60,8 @@ class GUIApp:
 
             # do actions
             try:
-                self.event_to_action[event](self.window, values)
+                self.event_to_action[event](values)
+                self.__eat_events__()
             except KeyError:
                 log.exception('unknown event')
 
@@ -49,22 +70,35 @@ class GUIApp:
         def _file_tab():
             return [
                 [sg.LBox(values=self.in_files, size=(80, 10), key='-FILESLB-')],
-                [sg.Input(visible=False, enable_events=True, key='-FILE-IN-'), sg.FilesBrowse()],
+                [sg.Input(visible=False, enable_events=True, key='-FILE-IN-'),
+                 sg.FilesBrowse(button_text='Vyber soubor')],
             ]
 
         def _user_tab():
             col_left = sg.Col(
                 [
-                    [sg.Text('Název', size=(15, 1)), sg.InputText(key='name')],
-                    [sg.Text('Forma', size=(15, 1)), sg.InputText(key='form')],
-                    [sg.Text('Počet', size=(15, 1)), sg.InputText(key='quantity')],
-                    [sg.Text('Celková cena', size=(15, 1)), sg.InputText(key='total_price')],
+                    [sg.Text('Název', size=(15, 1)), sg.InputText(key='name', do_not_clear=True)],
+                    [sg.Text('Forma', size=(15, 1)), sg.InputText(key='form', do_not_clear=True)],
+                    [sg.Text('Počet', size=(15, 1)), sg.InputText(key='quantity', do_not_clear=True)],
+                    [sg.Text('Celková cena', size=(15, 1)), sg.InputText(key='total_price', do_not_clear=True)],
                     [sg.Submit(button_text='Přidat', key='-ADD-'), sg.Cancel(button_text='Zrušit', key='-CANCEL-')]
                 ]
             )
             col_right = sg.Col(
                 [
-                    [sg.LBox(values=self.user_labels, size=(60, 10), key='-USERLB-')]
+                    [sg.Table(
+                        headings=list(self.table_header_to_key.values()),
+                        values=[],
+                        max_col_width=25,
+                        auto_size_columns=True,
+                        justification='right',
+                        num_rows=10,
+                        key='-TABLE-',
+                        enable_events=True,
+                        expand_x=False,
+                        expand_y=False,
+                        vertical_scroll_only=False,
+                    )]
                 ]
             )
             return [[col_left, col_right]]
@@ -97,24 +131,55 @@ class GUIApp:
         window = sg.Window('Label maker', layout)
         return window
 
-    def update_files(self, window, values):
-        files_box = window['-FILESLB-']
+    def display_table_delete_popup(self, values):
+        event, _ = sg.Window(
+            '',
+            [
+                [sg.Text('Smazat řádek?')],
+                [sg.B('Ano'), sg.B('Ne')],
+            ]
+        ).read(close=True)
+        row_num = values['-TABLE-'][0]
+        if event == 'Ano':
+            self.user_labels.pop(row_num)
+            self.update_user_table()
+
+    def update_files(self, values):
+        files_box = self.window['-FILESLB-']
         file_values = values['-FILE-IN-']
         self.in_files.extend(file_values.split(';'))
         self.in_files = sorted(set(self.in_files))
         files_box.update(self.in_files)
 
-    def add_user_label(self, window, values):
-        labels_box = window['-USERLB-']
-        # TODO: validate user input
+    def _write_to_table(self, data):
+        labels_table = self.window['-TABLE-']
+        labels_table.update(data)
+
+    def _prepare_data_for_table(self, data):
+        calculated_data = calculate_unit_price(data)
+        # add unit
+        for item in calculated_data:
+            item["unit"] = VALID_FORMS.get(item["form"], "")
+        # transform to list of lists
+        return [
+            [label[k] for k, v in self.table_header_to_key.items()]
+            for label in self.user_labels
+        ]
+
+    def update_user_table(self):
+        data_for_table = self._prepare_data_for_table(self.user_labels)
+        self._write_to_table(data_for_table)
+
+    def add_user_label(self, values):
+        # TODO: add validation
         item = {
             'name'       : values['name'],
             'form'       : values['form'],
-            'quantity'   : values['quantity'],
-            'total_price': values['total_price'],
+            'quantity'   : int(values['quantity']),
+            'total_price': int(values['total_price']),
         }
         self.user_labels.append(item)
-        labels_box.update(self.user_labels)
+        self.update_user_table()
 
     def load_files(self, files):
         data_from_files = []
@@ -128,7 +193,7 @@ class GUIApp:
         data.extend(self.user_labels)
         return data
 
-    def generate_labels(self, window, values):
+    def generate_labels(self, values):
         data = self.combine_inputs()
 
         # export data for future use
