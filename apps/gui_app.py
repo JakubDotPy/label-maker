@@ -45,49 +45,53 @@ class GUIApp:
                 log.exception('unknown event')
 
     def create_window(self):
-        file_tab_layout = [
-            [sg.LBox(values=self.in_files, size=(80, 10), key='-FILESLB-')],
-            [sg.Input(visible=False, enable_events=True, key='-FILE-IN-'), sg.FilesBrowse()],
-        ]
 
-        col_left = sg.Col(
-            [
-                [sg.Text('Zadej cedulku')],
-                [sg.Text('Název', size=(15, 1)), sg.InputText(key='name')],
-                [sg.Text('Forma', size=(15, 1)), sg.InputText(key='form')],
-                [sg.Text('Počet', size=(15, 1)), sg.InputText(key='quantity')],
-                [sg.Text('Celková cena', size=(15, 1)), sg.InputText(key='total_price')],
-                [sg.Submit(key='-ADD-'), sg.Cancel(key='-CANCEL-')]
+        def _file_tab():
+            return [
+                [sg.LBox(values=self.in_files, size=(80, 10), key='-FILESLB-')],
+                [sg.Input(visible=False, enable_events=True, key='-FILE-IN-'), sg.FilesBrowse()],
             ]
-        )
-        col_right = sg.Col(
-            [
-                [sg.LBox(values=self.user_labels, size=(60, 10), key='-USERLB-')]
+
+        def _user_tab():
+            col_left = sg.Col(
+                [
+                    [sg.Text('Název', size=(15, 1)), sg.InputText(key='name')],
+                    [sg.Text('Forma', size=(15, 1)), sg.InputText(key='form')],
+                    [sg.Text('Počet', size=(15, 1)), sg.InputText(key='quantity')],
+                    [sg.Text('Celková cena', size=(15, 1)), sg.InputText(key='total_price')],
+                    [sg.Submit(button_text='Přidat', key='-ADD-'), sg.Cancel(button_text='Zrušit', key='-CANCEL-')]
+                ]
+            )
+            col_right = sg.Col(
+                [
+                    [sg.LBox(values=self.user_labels, size=(60, 10), key='-USERLB-')]
+                ]
+            )
+            return [[col_left, col_right]]
+
+        def _options_tab():
+            return [
+                [sg.Text('Možnosti textového exportu:')],
+                [sg.Checkbox('číslování', key='numbering', size=(10, 1), default=False)],
+                [sg.Checkbox('boxíky', key='checkbox', size=(10, 1), default=False)],
             ]
-        )
-        user_tab_layout = [[col_left, col_right]]
 
-        options_tab_layout = [
-            [sg.Text('Možnosti textového exportu:')],
-            [sg.Checkbox('číslování', key='numbering', size=(10, 1), default=False)],
-            [sg.Checkbox('boxíky', key='checkbox', size=(10, 1), default=False)],
-        ]
-
-        template_file = Path('templates/labels_template.docx')
-        template_tab_layout = [
-            [sg.In(template_file.absolute(), size=(80, 1), key='-TEMPLATE-'), sg.FileBrowse()]
-        ]
+        def _template_tab():
+            template_file = Path('templates/labels_template.docx')
+            return [
+                [sg.In(template_file.absolute(), size=(80, 1), key='-TEMPLATE-'), sg.FileBrowse()]
+            ]
 
         layout = [
             [sg.TabGroup(
                 [[
-                    sg.Tab('File', file_tab_layout, tooltip='tip'),
-                    sg.Tab('User', user_tab_layout),
-                    sg.Tab('Template', template_tab_layout),
-                    sg.Tab('Options', options_tab_layout),
+                    sg.Tab('Ze souboru', _file_tab()),
+                    sg.Tab('Ručně', _user_tab()),
+                    sg.Tab('Template', _template_tab()),
+                    sg.Tab('Možnosti', _options_tab()),
                 ]]
             )],
-            [sg.Button('Create labels', key='-CREATE-')]
+            [sg.Button(button_text='vytvořit cedulky', key='-CREATE-')]
         ]
 
         window = sg.Window('Label maker', layout)
